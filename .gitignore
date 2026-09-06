@@ -1,0 +1,22 @@
+# Environment
+.env
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Large generated data (rebuild locally with chunk_documents.py + build_embeddings.py)
+data/processed/*.json
+data/processed/*.bin
+data/processed/*.txt
+
+# OS
+.DS_Store
+Thumbs.db

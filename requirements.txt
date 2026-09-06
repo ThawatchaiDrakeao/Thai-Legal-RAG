@@ -1,0 +1,17 @@
+langchain
+langchain-community
+langchain-google-genai
+google-genai
+chromadb
+faiss-cpu
+sentence-transformers
+pypdf
+pdfplumber
+PyMuPDF
+pytesseract
+Pillow
+opencv-python-headless
+python-dotenv
+pytest
+fastapi
+uvicorn[standard]

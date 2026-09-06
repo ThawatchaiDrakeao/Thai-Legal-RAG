@@ -1,0 +1,15 @@
+venv/
+.venv/
+frontend/node_modules/
+.git/
+.env
+data/raw/
+data/processed/ocr_*.json
+data/processed/ocr_*.txt
+data/processed/pdf_pages.json
+data/processed/pythainlp_articles.json
+**/__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+scripts/

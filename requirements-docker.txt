@@ -1,0 +1,12 @@
+google-genai
+faiss-cpu
+sentence-transformers
+pypdf
+pdfplumber
+PyMuPDF
+pytesseract
+Pillow
+opencv-python-headless
+python-dotenv
+fastapi
+uvicorn[standard]

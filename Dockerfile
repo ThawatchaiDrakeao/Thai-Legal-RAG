@@ -12,13 +12,11 @@ WORKDIR /app
 COPY requirements-docker.txt .
 RUN pip install --no-cache-dir -r requirements-docker.txt
 
-# Bake embedding model เข้า image ตอน build
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 
 COPY src/ ./src/
 COPY data/raw/sample_law.txt data/raw/civil_commercial_code_snapshot.pdf data/raw/penal_code_pythainlp.csv ./data/raw/
 
-# Build index จากศูนย์ตอน build (แทนการ copy ไฟล์สำเร็จรูปที่ไม่ได้ commit เข้า git)
 RUN mkdir -p data/processed && \
     python src/ingest_pdf.py && \
     python src/ingest_csv.py && \

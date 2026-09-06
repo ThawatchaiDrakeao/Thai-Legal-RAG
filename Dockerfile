@@ -1,6 +1,5 @@
 FROM python:3.11-slim
 
-# Tesseract OCR (ยังเก็บไว้เผื่อใช้ src/ingest_pdf.py ในอนาคต แม้ production ปัจจุบันไม่ได้ใช้)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-tha \
@@ -13,11 +12,18 @@ WORKDIR /app
 COPY requirements-docker.txt .
 RUN pip install --no-cache-dir -r requirements-docker.txt
 
-# Bake embedding model เข้า image ตอน build เพื่อไม่ต้องดาวน์โหลดใหม่ทุกครั้งที่ container เริ่ม
+# Bake embedding model เข้า image ตอน build
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 
 COPY src/ ./src/
-COPY data/processed/chunks.json data/processed/faiss_index.bin data/processed/meta.json ./data/processed/
+COPY data/raw/sample_law.txt data/raw/civil_commercial_code_snapshot.pdf data/raw/penal_code_pythainlp.csv ./data/raw/
+
+# Build index จากศูนย์ตอน build (แทนการ copy ไฟล์สำเร็จรูปที่ไม่ได้ commit เข้า git)
+RUN mkdir -p data/processed && \
+    python src/ingest_pdf.py && \
+    python src/ingest_csv.py && \
+    python src/chunk_documents.py && \
+    python src/build_embeddings.py
 
 EXPOSE 8000
 

@@ -46,7 +46,7 @@ def _normalize_article_field(value):
     such as '289', '371/1', or 'intro-1'. Returns None if no leading digits."""
     if value is None:
         return None
-    match = re.match(r"\d+", str(value))
+    match = re.search(r"\d+", str(value))
     return int(match.group()) if match else None
 
 

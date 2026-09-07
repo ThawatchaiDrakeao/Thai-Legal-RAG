@@ -7,7 +7,7 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -15,7 +15,7 @@ if hasattr(sys.stdout, "reconfigure"):
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 INDEX_PATH = PROJECT_DIR / "data" / "processed" / "faiss_index.bin"
 META_PATH = PROJECT_DIR / "data" / "processed" / "meta.json"
-MODEL_NAME = "intfloat/multilingual-e5-small"
+MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 RELEVANCE_THRESHOLD = 0.5
 
 _THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙"
@@ -89,7 +89,7 @@ def load():
             tmp_path.unlink()
     with open(META_PATH, "r", encoding="utf-8") as f:
         meta = json.load(f)
-    model = SentenceTransformer(MODEL_NAME)
+    model = TextEmbedding(model_name=MODEL_NAME)
     return index, meta, model
 
 
@@ -109,9 +109,11 @@ def search(query, index, meta, model, top_k=3):
                 seen_indices.add(idx)
 
     # Step 2: semantic search fills in the rest (or all of it, if no exact match).
-    query_vec = model.encode(
-        [f"query: {query}"], normalize_embeddings=True
-    ).astype("float32")
+    raw_vec = np.array(list(model.embed([query], batch_size=1))[0], dtype="float32")
+    norm = np.linalg.norm(raw_vec)
+    if norm > 0:
+        raw_vec = raw_vec / norm
+    query_vec = raw_vec.reshape(1, -1)
     scores, indices = index.search(query_vec, top_k)
 
     for score, idx in zip(scores[0], indices[0]):

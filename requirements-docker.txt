@@ -1,6 +1,5 @@
 google-genai
 faiss-cpu
-sentence-transformers
 pypdf
 pdfplumber
 PyMuPDF
@@ -10,3 +9,4 @@ opencv-python-headless
 python-dotenv
 fastapi
 uvicorn[standard]
+fastembed

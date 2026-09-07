@@ -12,7 +12,7 @@ WORKDIR /app
 COPY requirements-docker.txt .
 RUN pip install --no-cache-dir -r requirements-docker.txt
 
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
 
 COPY src/ ./src/
 COPY data/raw/sample_law.txt data/raw/civil_commercial_code_snapshot.pdf data/raw/penal_code_pythainlp.csv ./data/raw/

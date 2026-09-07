@@ -6,7 +6,7 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -16,7 +16,13 @@ PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
 CHUNKS_PATH = PROCESSED_DIR / "chunks.json"
 INDEX_PATH = PROCESSED_DIR / "faiss_index.bin"
 META_PATH = PROCESSED_DIR / "meta.json"
-MODEL_NAME = "intfloat/multilingual-e5-small"
+MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+
+def normalize(vectors):
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return vectors / norms
 
 
 def main():
@@ -31,18 +37,13 @@ def main():
         )
 
     print("Loading embedding model:", MODEL_NAME)
-    model = SentenceTransformer(MODEL_NAME)
+    model = TextEmbedding(model_name=MODEL_NAME)
 
     # E5 models expect an explicit task prefix for good retrieval quality.
-    texts = [f"passage: {c['text']}" for c in chunks]
+    texts = [c["text"] for c in chunks]
     print("Encoding", len(texts), "chunks...")
-    embeddings = model.encode(
-        texts,
-        batch_size=128,
-        show_progress_bar=True,
-        normalize_embeddings=True,
-    )
-    embeddings = np.asarray(embeddings, dtype="float32")
+    embeddings = np.array(list(model.embed(texts, batch_size=128)), dtype="float32")
+    embeddings = normalize(embeddings)
 
     dim = embeddings.shape[1]
     index = faiss.IndexFlatIP(dim)  # cosine similarity because vectors are normalized

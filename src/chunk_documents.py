@@ -13,16 +13,26 @@ PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
 PDF_PAGES_PATH = PROCESSED_DIR / "pdf_pages.json"
 PYTHAINLP_ARTICLES_PATH = PROCESSED_DIR / "pythainlp_articles.json"
 
-# PDF sources excluded from the main pipeline due to unreliable OCR
-# (verified: article numbers misread, ~68% of sampled findings were
-# genuine OCR errors, not false positives from cross-references).
-# Kept on disk / ingest code kept intact as a documented limitation;
-# replaced in production by the hand-labeled PyThaiNLP CSV dataset instead.
 EXCLUDED_PDF_SOURCES = {"penal_code_snapshot.pdf"}
 
 
+def _thai_to_arabic_digits(text):
+    thai_digits = "๐๑๒๓๔๕๖๗๘๙"
+    arabic_digits = "0123456789"
+    return text.translate(str.maketrans(thai_digits, arabic_digits))
+
+
+def _extract_article_number(text):
+    match = re.search(r"มาตรา\s*([๐-๙0-9]+)", text)
+    if not match:
+        return None
+
+    normalized = _thai_to_arabic_digits(match.group(1))
+    return int(normalized)
+
+
 def chunk_by_mattra(text):
-    pattern = r"(มาตรา\s*\d+)"
+    pattern = r"(มาตรา\s*[๐-๙0-9]+)"
     parts = re.split(pattern, text)
 
     chunks = []
@@ -32,7 +42,8 @@ def chunk_by_mattra(text):
         part = part.strip()
         if not part:
             continue
-        if re.fullmatch(r"มาตรา\s*\d+", part):
+
+        if re.fullmatch(r"มาตรา\s*[๐-๙0-9]+", part):
             if current_chunk:
                 chunks.append(current_chunk.strip())
             current_chunk = part + " "
@@ -44,6 +55,7 @@ def chunk_by_mattra(text):
 
     return chunks
 
+
 def process_file(filepath):
     with open(filepath, "r", encoding="utf-8") as f:
         text = f.read()
@@ -52,13 +64,23 @@ def process_file(filepath):
 
     result = []
     for i, chunk in enumerate(chunks):
-        result.append({
-            "id": os.path.basename(filepath) + "_" + str(i),
-            "source": os.path.basename(filepath),
-            "source_file": os.path.basename(filepath),
-            "page_number": None,
-            "text": chunk
-        })
+        article_number = _extract_article_number(chunk)
+
+        result.append(
+            {
+                "id": os.path.basename(filepath) + "_" + str(i),
+                "source": os.path.basename(filepath),
+                "source_file": os.path.basename(filepath),
+                "page_number": None,
+                "article_id": (
+                    f"มาตรา {article_number}"
+                    if article_number is not None
+                    else None
+                ),
+                "article_number": article_number,
+                "text": chunk,
+            }
+        )
 
     return result
 
@@ -72,23 +94,39 @@ def process_pdf_pages(exclude_sources=EXCLUDED_PDF_SOURCES):
 
     skipped = 0
     result = []
+
     for page in pages:
         if page.get("source_file") in exclude_sources:
             skipped += 1
             continue
+
         chunks = chunk_by_mattra(page.get("text", ""))
+
         for i, chunk in enumerate(chunks):
+            article_number = _extract_article_number(chunk)
+
             result.append(
                 {
                     "id": f"{page['source_file']}_page_{page['page_number']}_{i}",
                     "source": page["source_file"],
                     "source_file": page["source_file"],
                     "page_number": page["page_number"],
+                    "article_id": (
+                        f"มาตรา {article_number}"
+                        if article_number is not None
+                        else None
+                    ),
+                    "article_number": article_number,
                     "text": chunk,
                 }
             )
+
     if skipped:
-        print(f"Skipped {skipped} pages from excluded PDF sources: {exclude_sources}")
+        print(
+            f"Skipped {skipped} pages from excluded PDF sources: "
+            f"{exclude_sources}"
+        )
+
     return result
 
 
@@ -120,35 +158,44 @@ def process_pythainlp_articles():
                 "text": article["text"],
             }
         )
+
     return result
+
 
 def main():
     os.makedirs(PROCESSED_DIR, exist_ok=True)
 
     all_chunks = []
+
     for filename in os.listdir(RAW_DIR):
         if filename.endswith(".txt"):
             filepath = RAW_DIR / filename
             print("Processing:", filename)
+
             chunks = process_file(filepath)
             all_chunks.extend(chunks)
+
             print("  ->", len(chunks), "chunks")
 
     pdf_chunks = process_pdf_pages()
+
     if pdf_chunks:
         print("Adding PDF chunks:", len(pdf_chunks))
         all_chunks.extend(pdf_chunks)
 
     csv_chunks = process_pythainlp_articles()
+
     if csv_chunks:
         print("Adding PyThaiNLP CSV chunks:", len(csv_chunks))
         all_chunks.extend(csv_chunks)
 
     output_path = PROCESSED_DIR / "chunks.json"
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(all_chunks, f, ensure_ascii=False, indent=2)
 
     print("Total saved:", len(all_chunks), "chunks to", output_path)
+
 
 if __name__ == "__main__":
     main()

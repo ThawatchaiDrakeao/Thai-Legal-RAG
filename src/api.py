@@ -114,6 +114,11 @@ def get_resources():
     return load()
 
 
+@app.get("/")
+def root():
+    return {"service": "Thai Legal RAG API", "status": "ok"}
+
+
 @app.get("/health")
 def health():
     try:

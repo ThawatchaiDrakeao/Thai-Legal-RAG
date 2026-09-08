@@ -89,7 +89,10 @@ def load():
             tmp_path.unlink()
     with open(META_PATH, "r", encoding="utf-8") as f:
         meta = json.load(f)
-    model = TextEmbedding(model_name=MODEL_NAME)
+    model = TextEmbedding(
+        model_name=MODEL_NAME,
+        cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
+    )
     return index, meta, model
 
 

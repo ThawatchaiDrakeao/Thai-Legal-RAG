@@ -37,7 +37,10 @@ def main():
         )
 
     print("Loading embedding model:", MODEL_NAME)
-    model = TextEmbedding(model_name=MODEL_NAME)
+    model = TextEmbedding(
+        model_name=MODEL_NAME,
+        cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
+    )
 
     # E5 models expect an explicit task prefix for good retrieval quality.
     texts = [c["text"] for c in chunks]

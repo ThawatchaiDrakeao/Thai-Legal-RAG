@@ -92,6 +92,7 @@ def load():
     model = TextEmbedding(
         model_name=MODEL_NAME,
         cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
+        threads=1,
     )
     return index, meta, model
 

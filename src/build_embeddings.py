@@ -40,6 +40,7 @@ def main():
     model = TextEmbedding(
         model_name=MODEL_NAME,
         cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
+        threads=1,
     )
 
     # E5 models expect an explicit task prefix for good retrieval quality.

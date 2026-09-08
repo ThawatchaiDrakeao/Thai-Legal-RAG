@@ -20,3 +20,5 @@ data/processed/*.txt
 # OS
 .DS_Store
 Thumbs.db
+.fastembed_cache/
+data/processed/*.bak

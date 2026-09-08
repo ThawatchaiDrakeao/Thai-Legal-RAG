@@ -114,12 +114,12 @@ def get_resources():
     return load()
 
 
-@app.on_event("startup")
-def preload_resources():
-    # Load the embedding model + FAISS index eagerly at startup so the
-    # first request (including Render's own health check) is never
-    # blocked waiting for a slow cold-start load.
-    get_resources()
+# @app.on_event("startup")
+# def preload_resources():
+#     # Load the embedding model + FAISS index eagerly at startup so the
+#     # first request (including Render's own health check) is never
+#     # blocked waiting for a slow cold-start load.
+#     get_resources()
 
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -129,22 +129,11 @@ def root():
 
 @app.get("/health")
 def health():
-    try:
-        index, meta, _ = get_resources()
-        return {
-            "status": "ok",
-            "index_loaded": True,
-            "vectors": index.ntotal,
-            "metadata_entries": len(meta),
-            **get_usage_snapshot(),
-        }
-    except Exception as exc:
-        return {
-            "status": "degraded",
-            "index_loaded": False,
-            "vectors": 0,
-            "error": str(exc),
-        }
+    return {
+        "status": "ok",
+        "service": "Thai Legal RAG API",
+        **get_usage_snapshot(),
+    }
 
 
 @app.post("/ask", response_model=AskResponse)

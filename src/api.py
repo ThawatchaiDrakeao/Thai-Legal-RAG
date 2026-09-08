@@ -114,7 +114,15 @@ def get_resources():
     return load()
 
 
-@app.get("/")
+@app.on_event("startup")
+def preload_resources():
+    # Load the embedding model + FAISS index eagerly at startup so the
+    # first request (including Render's own health check) is never
+    # blocked waiting for a slow cold-start load.
+    get_resources()
+
+
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"service": "Thai Legal RAG API", "status": "ok"}
 

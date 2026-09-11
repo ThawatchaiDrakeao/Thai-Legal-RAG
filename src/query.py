@@ -1,4 +1,5 @@
 import json
+import resource
 import re
 import shutil
 import sys
@@ -16,6 +17,11 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 INDEX_PATH = PROJECT_DIR / "data" / "processed" / "faiss_index.bin"
 META_PATH = PROJECT_DIR / "data" / "processed" / "meta.json"
 MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+
+def _log_rss(label):
+    rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    print(f"[MEMDIAG] {label}: {rss_kb / 1024:.1f} MiB", flush=True)
 RELEVANCE_THRESHOLD = 0.5
 
 _THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙"
@@ -89,11 +95,17 @@ def load():
             tmp_path.unlink()
     with open(META_PATH, "r", encoding="utf-8") as f:
         meta = json.load(f)
-    model = TextEmbedding(
-        model_name=MODEL_NAME,
-        cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
-        threads=1,
-    )
+    _log_rss("before_model_load")
+    try:
+        model = TextEmbedding(
+            model_name=MODEL_NAME,
+            cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
+            threads=1,
+        )
+    except Exception:
+        _log_rss("crash_point")
+        raise
+    _log_rss("after_model_load")
     return index, meta, model
 
 

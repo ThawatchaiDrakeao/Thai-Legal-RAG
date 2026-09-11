@@ -156,10 +156,15 @@ def ask(request: Request, body: AskRequest):
             ),
         )
     try:
+        print("[ASK] received", flush=True)
+        print("[ASK] loading resources", flush=True)
         index, meta, model = get_resources()
+        print("[ASK] resources loaded", flush=True)
+        print("[ASK] calling answer_question", flush=True)
         answer, contexts = answer_question(
             body.question, index, meta, model, top_k=3
         )
+        print("[ASK] answer_question completed", flush=True)
         sources = [
             Source(
                 text=item["text"],
@@ -169,6 +174,7 @@ def ask(request: Request, body: AskRequest):
             )
             for item in contexts
         ]
+        print("[ASK] returning response", flush=True)
         return AskResponse(
             answer=answer,
             sources=sources,

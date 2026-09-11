@@ -1,431 +1,101 @@
-# 🇹🇭 Thai Legal RAG
+# Thai Legal RAG
 
-A production-oriented **Thai Legal Retrieval-Augmented Generation (RAG)** system for searching and answering questions about Thai law using official/legal text sources, semantic retrieval, exact article matching, and Google Gemini.
+Thai Legal RAG is a Thai legal-domain Retrieval-Augmented Generation (RAG) application. It retrieves relevant legal context from a structured corpus, then uses Google Gemini to generate an answer with the retrieved sources. The system combines FastAPI, SentenceTransformers, FAISS, and Gemini. It is an educational and portfolio project, not legal advice.
 
-> ⚠️ **Demo / Portfolio Project** — This system is designed for demonstration and experimentation. It is **not legal advice** and should not be relied upon for real legal decisions.
+## Demo / Production
 
----
+Production URL: <https://thai-legal-rag.onrender.com>
 
-## 🏗️ Architecture
+Production smoke verification has been performed successfully. Long-term stability, soak testing, Render memory behavior, and production Hugging Face runtime-download behavior have not been independently verified.
+
+Verified endpoints:
+
+- `GET /` — service status
+- `GET /health` — health and request-quota status
+- `POST /ask` — answer generation with retrieved sources
+
+## Problem
+
+Thai legal information is difficult to query naturally across multiple source documents and legal domains. This project explores a retrieval-first approach: retrieve relevant legal passages before asking an LLM to formulate an answer.
+
+## Architecture
 
 ```text
-┌──────────────────────┐
-│   React + Vite UI    │
-│      Frontend        │
-└──────────┬───────────┘
-           │ HTTP
-           ▼
-┌──────────────────────┐
-│      FastAPI         │
-│       Backend        │
-│                      │
-│  /health             │
-│  /ask                │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────────────┐
-│       RAG Pipeline           │
-│                              │
-│  1. Article Number Detection │
-│  2. Exact Article Matching   │
-│  3. Semantic Retrieval       │
-│  4. Context Construction     │
-│  5. Gemini Generation        │
-└──────────┬───────────────────┘
-           │
-      ┌────┴─────┐
-      ▼          ▼
-┌───────────┐ ┌────────────────┐
-│ FAISS     │ │ Google Gemini  │
-│ Vector DB │ │ gemini-2.5-flash│
-└───────────┘ └────────────────┘
+User
+  -> FastAPI /ask
+  -> article-number detection and exact-match retrieval
+     or semantic retrieval
+  -> SentenceTransformers query embedding
+  -> FAISS similarity search
+  -> retrieved legal context
+  -> Gemini generation
+  -> answer + sources
 ```
 
----
+Retrieval and generation are separate stages. FAISS and the retrieval code select context; Gemini generates the response from that context.
 
-# ✨ Features
+## RAG Pipeline
 
-* 🇹🇭 Thai legal document retrieval
-* 🔎 Exact article-number matching
-* 🧠 Semantic vector search
-* ⚡ FAISS cosine-similarity retrieval
-* 🤖 Google Gemini `gemini-2.5-flash`
-* 📚 Source/page citations
-* 🚦 API rate limiting
-* 🛡️ Context-grounded answering
-* 🐳 Docker deployment
-* ☁️ Render deployment
-* 🧪 Automated regression tests
-* 🔄 Reproducible document ingestion and embedding pipeline
+1. Ingest legal source files.
+2. Chunk the documents and preserve source metadata.
+3. Generate normalized embeddings.
+4. Build a FAISS `IndexFlatIP` index.
+5. Detect explicit article numbers and perform exact metadata matching when present.
+6. Use semantic retrieval to fill the result set.
+7. Pass the selected context to Gemini.
+8. Return the answer together with source text, source file, page, and score fields.
 
----
+The verified corpus contains 3,361 vectors in a 384-dimensional FAISS index. The corpus includes the Civil and Commercial Code snapshot, the PyThaiNLP Thai-law dataset, and a small sample law source. The structured PyThaiNLP dataset is preferred over the problematic penal-code OCR PDF.
 
-# 🧰 Tech Stack
+### Legal sources
 
-| Layer               | Technology                                                    |
-| ------------------- | ------------------------------------------------------------- |
-| Frontend            | React + Vite                                                  |
-| Backend             | FastAPI                                                       |
-| API Server          | Uvicorn                                                       |
-| LLM                 | Google Gemini 2.5 Flash                                       |
-| LLM SDK             | `google-genai`                                                |
-| Embeddings          | FastEmbed + ONNX                                              |
-| Embedding Model     | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
-| Vector Search       | FAISS                                                         |
-| Vector Dimension    | 384                                                           |
-| Database            | FAISS index + JSON metadata                                   |
-| Language Processing | PyThaiNLP                                                     |
-| Container           | Docker                                                        |
-| Deployment          | Render                                                        |
-| Testing             | Pytest                                                        |
-| CI                  | GitHub Actions                                                |
+- `civil_commercial_code_snapshot.pdf` — primary Civil and Commercial Code source.
+- `penal_code_pythainlp.csv` — structured Thai-law records covering Articles 1–398.
+- `sample_law.txt` — small sample source used by the ingestion pipeline.
+- `penal_code_snapshot.pdf` is excluded from the production corpus because its font encoding produced unreliable OCR/article text.
 
-> The current production embedding implementation uses **FastEmbed/ONNX** instead of `sentence-transformers` + PyTorch to significantly reduce memory usage during deployment.
+## Embedding Model
 
----
-
-# 📚 Legal Corpus
-
-The current production corpus contains **3,361 chunks**.
-
-### 1. Civil and Commercial Code
-
-Source:
+The current Docker/production embedding configuration uses:
 
 ```text
-civil_commercial_code_snapshot.pdf
+alphaedge-ai/multilingual-e5-small-tha-16384
 ```
 
-Approximately:
+The model is loaded through SentenceTransformers `6.0.1` and used for Thai/multilingual query and document embeddings. The verified Docker image bakes the model into `/app/.sentence_transformers_cache` and uses local/offline loading at runtime.
+
+No benchmark superiority claim is made here; the documented metrics are the verified index dimensions and vector count.
+
+## LLM
+
+The RAG pipeline uses Google Gemini through the `google-genai` SDK. The source code calls:
 
 ```text
-2,906 chunks
-```
-
-The PDF is text-based and is used as the primary source for the Civil and Commercial Code.
-
----
-
-### 2. Thai Penal Code
-
-Source:
-
-```text
-penal_code_pythainlp.csv
-```
-
-Contains:
-
-```text
-452 records
-Articles 1–398
-```
-
-The dataset is derived from the PyThaiNLP Thai-law corpus and is currently preferred over the OCR PDF because of encoding/OCR reliability.
-
----
-
-### 3. Sample Law
-
-```text
-sample_law.txt
-```
-
-Contains:
-
-```text
-3 chunks
-```
-
----
-
-### ⚠️ OCR Source Excluded
-
-```text
-penal_code_snapshot.pdf
-```
-
-This source is intentionally excluded from production because the PDF uses problematic Private Use Area font encoding.
-
-Attempts using:
-
-* pypdf
-* pdfplumber
-* PyMuPDF
-* Tesseract OCR
-* image preprocessing
-* multiple OCR resolutions
-
-still produced unreliable article numbers and text.
-
-Therefore, the structured PyThaiNLP CSV is used instead.
-
----
-
-# 🔍 Retrieval Pipeline
-
-The retrieval system uses a hybrid strategy.
-
-## Step 1 — Detect Article Number
-
-For queries such as:
-
-```text
-มาตรา 420 แห่งประมวลกฎหมายแพ่งและพาณิชย์กล่าวถึงเรื่องอะไร
-```
-
-the system detects:
-
-```text
-Article = 420
-```
-
-Thai numerals are also normalized.
-
-Example:
-
-```text
-มาตรา ๔๒๐
-```
-
-→
-
-```text
-มาตรา 420
-```
-
----
-
-## Step 2 — Exact Article Matching
-
-When an article number is detected, the system first searches metadata for the matching article.
-
-This prevents semantic similarity from returning unrelated articles when the user explicitly asks about a particular provision.
-
-Example:
-
-```text
-มาตรา 420
-```
-
-returns the corresponding:
-
-```text
-มาตรา 420
-```
-
-before semantic retrieval is considered.
-
----
-
-## Step 3 — Semantic Search
-
-For conceptual questions without an explicit article number, the system uses vector similarity search.
-
-Embeddings are generated using:
-
-```text
-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-```
-
-through:
-
-```text
-FastEmbed / ONNX
-```
-
-Vectors are normalized and searched using:
-
-```text
-FAISS IndexFlatIP
-```
-
-which is equivalent to cosine similarity when vectors are normalized.
-
----
-
-# 🤖 RAG Generation
-
-Retrieved legal context is passed to:
-
-```text
-Google Gemini
 gemini-2.5-flash
 ```
 
-The prompt instructs the model to:
+The prompt instructs Gemini to answer from the retrieved legal context and identify the available source information.
 
-* answer only from retrieved context
-* avoid inventing legal information
-* state when the available context is insufficient
-* include source information
+## Docker / Deployment Engineering
 
-Example flow:
+The Docker dependency stack was made deterministic for CPU inference. The verified configuration:
 
-```text
-User Question
-      │
-      ▼
-Article Detection
-      │
-      ├── Article Found ──► Exact Match
-      │
-      └── No Article ─────► Semantic Search
-                              │
-                              ▼
-                       Retrieved Context
-                              │
-                              ▼
-                       Gemini 2.5 Flash
-                              │
-                              ▼
-                           Answer
-```
+- `torch==2.13.0+cpu`
+- official PyTorch CPU wheel index
+- `numpy==1.26.4`
+- `sentence-transformers==6.0.1`
+- model downloaded during image build
+- `HF_HUB_OFFLINE=1` at runtime
+- `local_files_only=True` for model loading
+- no NVIDIA/CUDA packages in the verified image
 
----
+The container does not require GPU inference, so CPU-only PyTorch avoids unnecessary CUDA dependencies and makes the image/runtime dependency choice more deterministic. The local image reached 526.5 MiB peak RSS after model load; this is local Docker evidence only and is not a Render memory measurement.
 
-# 🚀 Getting Started
+## API
 
-## 1. Clone Repository
-
-```bash
-git clone https://github.com/ThawatchaiDrakeao/Thai-Legal-RAG.git
-cd Thai-Legal-RAG
-```
-
----
-
-# 🐍 Backend Setup
-
-Recommended Python version:
-
-```text
-Python 3.11
-```
-
-Create virtual environment:
-
-```bash
-python -m venv venv
-```
-
-Activate on Windows PowerShell:
-
-```powershell
-.\venv\Scripts\Activate.ps1
-```
-
-Or Git Bash:
-
-```bash
-source venv/Scripts/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-# 🔐 Environment Variables
-
-Create:
-
-```text
-.env
-```
-
-Add your Gemini API key:
-
-```env
-GOOGLE_API_KEY=your_google_ai_studio_api_key
-```
-
-The project uses Google AI Studio / Gemini API.
-
----
-
-# 📦 Build Legal Corpus
-
-The processed corpus can be reproduced from the raw sources.
-
-Run:
-
-```bash
-python src/ingest_pdf.py
-python src/ingest_csv.py
-python src/chunk_documents.py
-python src/build_embeddings.py
-```
-
-This generates:
-
-```text
-data/processed/
-├── chunks.json
-├── meta.json
-└── index.faiss
-```
-
-The processed directory is intentionally excluded from Git because it can be regenerated.
-
----
-
-# ▶️ Run Backend
-
-```bash
-python -m uvicorn src.api:app --reload
-```
-
-Backend:
-
-```text
-http://127.0.0.1:8000
-```
-
-API documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-Health check:
-
-```text
-http://127.0.0.1:8000/health
-```
-
----
-
-# ❤️ Health Check
-
-Example:
-
-```json
-{
-  "status": "ok",
-  "index_loaded": true,
-  "vectors": 3361,
-  "metadata_entries": 3361,
-  "daily_requests_used": 0,
-  "daily_requests_limit": 15,
-  "minute_requests_used": 0,
-  "minute_requests_limit": 4
-}
-```
-
----
-
-# 🔌 API
-
-## GET `/`
+### `GET /`
 
 Returns basic service information.
-
-Example:
 
 ```json
 {
@@ -434,25 +104,21 @@ Example:
 }
 ```
 
----
+### `GET /health`
 
-## GET `/health`
+Returns service status and the in-process daily/minute request counters. It is intentionally lightweight and does not force lazy resource loading.
 
-Returns service and vector-index status.
+### `POST /ask`
 
----
-
-## POST `/ask`
-
-Request:
+Request schema:
 
 ```json
 {
-  "question": "มาตรา 420 แห่งประมวลกฎหมายแพ่งและพาณิชย์กล่าวถึงเรื่องอะไร"
+  "question": "มาตรา 420 มีความรับผิดอย่างไร"
 }
 ```
 
-Example response:
+The `question` field is required, must contain 1–2,000 characters, and the response contains `answer`, `sources`, and `found_context`:
 
 ```json
 {
@@ -469,402 +135,169 @@ Example response:
 }
 ```
 
----
+The application uses global limits of 4 requests per minute and 15 requests per day for the demo service.
 
-# 🧪 Testing
+## Verification
 
-Run:
+| Verification | Result |
+|---|---|
+| Docker build | PASS |
+| CPU-only PyTorch | `2.13.0+cpu` |
+| `torch.cuda.is_available()` | `False` |
+| SentenceTransformers | `6.0.1` |
+| FAISS vectors | 3,361 |
+| FAISS dimension | 384 |
+| `python -m compileall src` | PASS |
+| `pytest` | 6 passed |
+| Production `GET /` | HTTP 200 |
+| Production `GET /health` | HTTP 200, status `ok` |
+| Production `POST /ask` | HTTP 200 in smoke verification |
+| Production Article 420 | PASS |
+| Production Article 288 | PASS with known civil/criminal collision |
 
-```bash
-pytest tests/ -v
-```
+Production smoke verification is successful for the checks above. It is not a claim of 24/7 reliability, long-term stability, or production-scale performance.
 
-Current regression suite:
+## Example Regression Checks
 
-```text
-6/6 tests passing
-```
+### Article 420
 
-Important regression cases include:
-
-* Article 289
-* Article 373
-* Article 1
-* Article 420
-* Full-sentence article queries
-* Article IDs containing Thai prefixes such as `มาตรา 420`
-
----
-
-# 🐳 Docker
-
-The project includes a Docker deployment configuration.
-
-Build:
-
-```bash
-docker build -t thai-legal-rag .
-```
-
-Run:
-
-```bash
-docker run --env-file .env -p 8000:8000 thai-legal-rag
-```
-
-The Docker image rebuilds the required legal chunks and vector index during the image build.
-
-### Memory Optimization
-
-The original implementation used:
+Question:
 
 ```text
-sentence-transformers
-PyTorch
+มาตรา 420 มีความรับผิดอย่างไร
 ```
 
-which caused excessive memory consumption on low-memory hosting.
+Verified in production:
 
-The production implementation was changed to:
+- HTTP 200
+- answer returned
+- `found_context: true`
+- Civil and Commercial Code source retrieved
+- page 75 returned with score 1.0
+
+### Article 288
+
+Question:
 
 ```text
-FastEmbed
-ONNX Runtime
-paraphrase-multilingual-MiniLM-L12-v2
+มาตรา 288 มีโทษอย่างไร
 ```
 
-This reduced container memory usage substantially and resolved the Render free-tier OOM issue.
+Verified in production:
 
----
+- HTTP 200
+- answer returned
+- `found_context: true`
+- criminal Article 288 source retrieved from `pythainlp_thai_law`
 
-# ☁️ Deployment
+The same article number also occurs in the civil corpus, so a civil Article 288 result can appear in the retrieved sources. This known collision has not been fixed by the current implementation.
 
-Backend deployment:
-
-```text
-Render
-```
-
-Production service:
-
-```text
-https://thai-legal-rag.onrender.com
-```
-
-The backend is designed to run within the memory limitations of the Render free tier.
-
-> Production deployment status should be verified through `/health` after each major deployment.
-
----
-
-# 🚦 Rate Limiting
-
-Because the project uses the Gemini free tier, the API implements a global application-level limiter.
-
-Current application limits:
-
-```text
-4 requests / minute
-15 requests / day
-```
-
-This provides a safety buffer below the reported Gemini project quota.
-
-> These limits are intended for demo/portfolio usage, not high-volume production traffic.
-
----
-
-# ⚠️ Limitations
-
-This project currently has several limitations.
-
-### Gemini Free Tier
-
-The application relies on free-tier Gemini quota.
-
-Therefore:
-
-* requests are limited
-* HTTP 429 can occur
-* the system is not intended for high traffic
-
----
-
-### Legal Accuracy
-
-This system is a RAG demonstration.
-
-It does not replace:
-
-* lawyers
-* legal professionals
-* official legal databases
-* current government publications
-
-Legal information may also change over time.
-
----
-
-### Corpus Coverage
-
-The current corpus is intentionally limited.
-
-It should not be considered a complete representation of Thai law.
-
----
-
-### OCR
-
-Some scanned legal PDFs contain problematic font encoding.
-
-The project currently avoids unreliable OCR sources where structured text is available.
-
----
-
-# 🛡️ Security / Reliability
-
-Current safeguards include:
-
-* API request validation
-* maximum question length
-* rate limiting
-* context-grounded prompting
-* separation of HTTP 429 from server errors
-* deterministic retrieval
-* regression testing
-* reproducible vector-index generation
-
-Future improvements:
-
-* prompt-injection protection
-* stronger input sanitization
-* authentication
-* distributed rate limiting
-* monitoring / observability
-* audit logging
-
----
-
-# 🗂️ Project Structure
+## Project Structure
 
 ```text
 thai-legal-rag/
-│
-├── .github/
-│   └── workflows/
-│       └── tests.yml
-│
+├── .github/workflows/tests.yml
 ├── data/
 │   ├── raw/
 │   └── processed/
-│
 ├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
-│
+├── scripts/
 ├── src/
 │   ├── api.py
-│   ├── query.py
-│   ├── rag_pipeline.py
+│   ├── build_embeddings.py
 │   ├── chunk_documents.py
-│   ├── ingest_pdf.py
 │   ├── ingest_csv.py
-│   └── build_embeddings.py
-│
+│   ├── ingest_pdf.py
+│   ├── query.py
+│   └── rag_pipeline.py
 ├── tests/
-│   └── ...
-│
 ├── Dockerfile
 ├── requirements.txt
 ├── requirements-docker.txt
-├── .gitignore
+├── PROJECT_SUMMARY.md
 └── README.md
 ```
 
----
+## Known Limitations
 
-# 🔄 CI/CD
+1. Article 288 has a civil/criminal article-number collision that can create retrieval ambiguity.
+2. The Render memory limit has not been independently verified.
+3. Render production OOM behavior has not been independently verified.
+4. Render Hugging Face runtime-download behavior could not be verified because production logs were unavailable.
+5. Long-term production stability and soak testing have not been performed.
+6. The corpus is limited and should not be treated as a complete representation of Thai law.
+7. Some scanned legal PDFs have unreliable font encoding; the affected penal-code OCR source is excluded in favor of structured text.
+8. Gemini free-tier quota can produce HTTP 429 responses.
 
-GitHub Actions automatically runs the project test pipeline.
+## Development / Local Run
 
-The pipeline:
+Create a virtual environment and install the Python dependencies:
 
-```text
-Install dependencies
-       ↓
-Ingest PDF
-       ↓
-Ingest CSV
-       ↓
-Build chunks
-       ↓
-Build embeddings
-       ↓
-Run pytest
+```bash
+python -m venv venv
 ```
 
-This ensures that the vector index can be reproducibly rebuilt from the source corpus.
+Windows PowerShell:
 
----
-
-# 📈 Current Project Status
-
-| Component                      | Status     |
-| ------------------------------ | ---------- |
-| Legal corpus ingestion         | ✅          |
-| PDF processing                 | ✅          |
-| PyThaiNLP corpus               | ✅          |
-| Chunking                       | ✅          |
-| Metadata                       | ✅          |
-| FAISS index                    | ✅          |
-| Semantic retrieval             | ✅          |
-| Exact article matching         | ✅          |
-| Article 420 regression         | ✅          |
-| Gemini integration             | ✅          |
-| FastAPI                        | ✅          |
-| Rate limiting                  | ✅          |
-| Automated tests                | ✅ 6/6      |
-| Docker                         | ✅          |
-| OOM optimization               | ✅          |
-| GitHub Actions                 | ✅          |
-| Render deployment              | ✅ Deployed |
-| Production health verification | ⏳          |
-| React frontend                 | ✅ Local    |
-| Frontend cloud deployment      | ⏳          |
-| Prompt-injection guardrails    | ⏳          |
-| Multi-turn memory              | ⏳          |
-| Evaluation dataset             | ⏳          |
-| PostgreSQL / pgvector          | ⏳          |
-
----
-
-# 🧠 Engineering Highlights
-
-This project demonstrates several practical AI Engineering concepts:
-
-### RAG
-
-```text
-Documents
-   ↓
-Chunking
-   ↓
-Embeddings
-   ↓
-Vector Index
-   ↓
-Retrieval
-   ↓
-LLM
+```powershell
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-### Hybrid Retrieval
+Set `GOOGLE_API_KEY` or `GEMINI_API_KEY` in `.env` for Gemini requests. The application also accepts the existing `.env.example` as a starting point.
 
-Rather than relying exclusively on semantic similarity:
+To run the API locally:
 
-```text
-Exact Article Match
-        +
-Semantic Search
+```bash
+python -m uvicorn src.api:app --reload
 ```
 
-This is particularly important for legal questions where users frequently reference specific article numbers.
+The local API is available at `http://127.0.0.1:8000`, with interactive documentation at `/docs`.
 
-### Production Optimization
+To build the Docker image used for the verified CPU/offline model path:
 
-The project originally experienced memory limitations when deploying the embedding stack.
-
-Replacing:
-
-```text
-PyTorch + Sentence Transformers
+```bash
+docker build -t thai-legal-rag .
+docker run --env-file .env -p 8000:8000 thai-legal-rag
 ```
 
-with:
+## Testing
 
-```text
-FastEmbed + ONNX Runtime
+Run the verified checks:
+
+```bash
+python -m compileall src
+pytest
 ```
 
-significantly reduced runtime memory consumption.
+The verified test result is 6 passed tests.
 
-### Reproducibility
+## Engineering Highlights
 
-Processed vectors are not treated as the source of truth.
+- Thai-language legal RAG with source-aware responses
+- Hybrid exact article matching and semantic retrieval
+- FAISS vector search with SentenceTransformers embeddings
+- FastAPI API design with validation and quota protection
+- CPU-only PyTorch dependency selection for Docker
+- Model baking and offline runtime loading
+- Reproducible ingestion and FAISS index generation
+- Production smoke verification and regression checks
+- Evidence-based debugging of deployment/runtime behavior
 
-Instead:
+## Continuous Integration
 
-```text
-Raw Legal Data
-      ↓
-Ingestion
-      ↓
-Chunking
-      ↓
-Embedding
-      ↓
-FAISS
-```
+The repository includes `.github/workflows/tests.yml` for the project test pipeline. The local verification recorded for this version is 6 passed tests; no additional benchmark or accuracy metric is claimed here.
 
-can be rebuilt through the CI/Docker pipeline.
+## Repository
 
----
+GitHub: <https://github.com/ThawatchaiDrakeao/Thai-Legal-RAG>
 
-# 🔮 Roadmap
+## Status
 
-## Phase 1 — Current
+Production smoke verified.
 
-* [x] Legal corpus ingestion
-* [x] Hybrid retrieval
-* [x] Gemini integration
-* [x] FastAPI
-* [x] Docker
-* [x] CI testing
-* [x] Render deployment
+The core API works for the verified production smoke checks, including Article 420 and Article 288 retrieval. Long-term stability and Render memory behavior remain unverified, and the Article 288 civil/criminal collision remains a known limitation.
 
-## Phase 2
+## License / Disclaimer
 
-* [ ] Deploy React frontend
-* [ ] Production `/health` verification
-* [ ] Prompt-injection guardrails
-* [ ] Better error handling
-* [ ] Monitoring
-
-## Phase 3
-
-* [ ] Multi-turn conversation memory
-* [ ] Evaluation dataset
-* [ ] Retrieval quality metrics
-* [ ] Precision / Recall / MRR evaluation
-* [ ] Better citation handling
-
-## Phase 4
-
-* [ ] PostgreSQL
-* [ ] pgvector
-* [ ] Hybrid BM25 + vector search
-* [ ] User authentication
-* [ ] Production observability
-
----
-
-# 👨‍💻 Author
-
-**Thawatchai Drakeao**
-
-Software Engineer · AI Engineering · Data Engineering
-
-GitHub:
-
-`https://github.com/ThawatchaiDrakeao/Thai-Legal-RAG`
-
----
-
-# ⚖️ Disclaimer
-
-This project is provided for educational and demonstration purposes only.
-
-The generated answers may contain errors or incomplete information.
-
-**Do not use this system as a substitute for professional legal advice or official legal sources.**
+This project is provided for educational and demonstration purposes only. Generated answers may be incomplete or incorrect. Do not use this system as a substitute for professional legal advice or official legal sources.

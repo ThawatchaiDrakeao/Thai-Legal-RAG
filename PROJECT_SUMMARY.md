@@ -94,3 +94,53 @@ frontend/                                       React/Vite web demo
 tests/                                          automated tests (5 passed)
 context.md                                      บริบทสำหรับ AI assistant
 README.md                                       คู่มือติดตั้งและรัน
+
+## Latest verified state (2026-09-11)
+
+This section records the latest verified Docker and production-embedding work. Earlier sections remain historical project context.
+
+### Current status
+
+- The CPU-only production image was built and tested locally.
+- The Render deployment was not pushed or deployed after this work, so production recovery is not yet verified.
+- The previous Render incident remains the operational context: `/ask` failed while lazy-loading embedding resources. This change removes runtime Hugging Face dependency and CUDA/Torch ambiguity, but does not prove that the 512 MiB Render limit is sufficient.
+
+### Root cause and Docker changes
+
+- The verified runtime risks addressed here were an unpinned Torch dependency that could resolve to a non-CPU build and runtime model loading that could contact Hugging Face.
+- `requirements-docker.txt` now installs `torch==2.13.0+cpu` from the official PyTorch CPU wheel index and explicitly pins `numpy==1.26.4`.
+- The Docker build still uses `alphaedge-ai/multilingual-e5-small-tha-16384`, downloads it into `/app/.sentence_transformers_cache`, and sets `HF_HUB_OFFLINE=1` for runtime.
+- Runtime model loading uses `local_files_only=True` in `src/query.py`; the index-building path in `src/build_embeddings.py` uses the same local-only behavior.
+- SentenceTransformers version verified in the image: `6.0.1`.
+
+### Image and runtime evidence
+
+- `docker build --no-cache --progress=plain -t thai-legal-rag-diagnostic .` completed successfully.
+- Image verification reported: `torch=2.13.0+cpu`, `cuda=False`, `sentence_transformers=6.0.1`, `numpy=1.26.4`, and `faiss=1.15.0`.
+- The image contains the model weights (`model.safetensors`) and tokenizer/config/SentenceTransformer files. Cache size was approximately 108 MB.
+- The build produced `data/processed/chunks.json`, `meta.json`, and `faiss_index.bin` with 3,361 records/vectors; the expected vector count is 3,361.
+- No NVIDIA/CUDA packages were present in the image package inspection.
+- Container RSS after model load reached `526.5 MiB` locally. Docker Desktop had 15.28 GiB available, so this is not Render evidence; it remains a blocker/risk against Render's 512 MiB limit.
+
+### API and regression evidence
+
+- Local container `/` and `/health` returned HTTP 200.
+- One valid local `/ask` request for `มาตรา 420 มีความรับผิดอย่างไร` returned HTTP 200 with an answer, `found_context: true`, and sources from `civil_commercial_code_snapshot.pdf` (page 75, score 1.0). Article 420 behavior therefore remained verified for this request.
+- Article 288 exact-match metadata verification found two matching records, from `civil_commercial_code_snapshot.pdf` and `pythainlp_thai_law`; no second `/ask` request was used for this check.
+- Container logs confirmed baked-model loading without a runtime Hugging Face download/retry and showed the complete `[ASK]` sequence through a successful response.
+- `python -m compileall src` passed.
+- `pytest tests -q` passed: 6 tests.
+- `git diff --check` passed with no whitespace errors.
+
+### Files and commits
+
+- The implementation commit changed only: `Dockerfile`, `requirements-docker.txt`, `src/build_embeddings.py`, and `src/query.py`.
+- Previous diagnostic commit: `00e3c91 debug: add ask request diagnostics`.
+- Current implementation commit: `5248818 fix: use CPU torch and offline baked embedding model`.
+- `origin/main` remained at `00e3c91`; no push or Render deployment was performed.
+- No secrets were included in the image or committed. `.env` was injected only for the local container test and remained excluded by `.dockerignore`.
+
+### Remaining blockers
+
+- Render must still be tested with the new commit. The local post-load RSS of 526.5 MiB exceeds the stated Render 512 MiB limit, so production success cannot be claimed.
+- Experimental reranker work and its known limitations remain separate from this production image change.

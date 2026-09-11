@@ -45,7 +45,11 @@ def main():
     model_kwargs = {}
     if MODEL_CACHE_DIR.exists():
         model_kwargs["cache_folder"] = str(MODEL_CACHE_DIR)
-    model = SentenceTransformer(MODEL_NAME, **model_kwargs)
+    model = SentenceTransformer(
+        MODEL_NAME,
+        local_files_only=True,
+        **model_kwargs,
+    )
 
     texts = [c["text"] for c in chunks]
     print("Encoding", len(texts), "chunks...")

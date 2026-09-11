@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements-docker.txt
 
 RUN python -c "import torch; torch.set_num_threads(1); from sentence_transformers import SentenceTransformer; SentenceTransformer('alphaedge-ai/multilingual-e5-small-tha-16384', cache_folder='/app/.sentence_transformers_cache')"
 
+ENV HF_HUB_OFFLINE=1
+
 COPY src/ ./src/
 COPY data/raw/sample_law.txt data/raw/civil_commercial_code_snapshot.pdf data/raw/penal_code_pythainlp.csv ./data/raw/
 

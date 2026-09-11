@@ -109,7 +109,11 @@ def load():
         model_kwargs = {}
         if MODEL_CACHE_DIR.exists():
             model_kwargs["cache_folder"] = str(MODEL_CACHE_DIR)
-        model = SentenceTransformer(MODEL_NAME, **model_kwargs)
+        model = SentenceTransformer(
+            MODEL_NAME,
+            local_files_only=True,
+            **model_kwargs,
+        )
     except Exception:
         _log_rss("crash_point")
         raise

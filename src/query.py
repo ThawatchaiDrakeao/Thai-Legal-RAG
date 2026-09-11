@@ -1,5 +1,4 @@
 import json
-import resource
 import re
 import shutil
 import sys
@@ -8,7 +7,13 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from fastembed import TextEmbedding
+import torch
+from sentence_transformers import SentenceTransformer
+
+try:
+    import resource
+except ImportError:  # Windows local development does not provide resource.
+    resource = None
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -16,10 +21,13 @@ if hasattr(sys.stdout, "reconfigure"):
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 INDEX_PATH = PROJECT_DIR / "data" / "processed" / "faiss_index.bin"
 META_PATH = PROJECT_DIR / "data" / "processed" / "meta.json"
-MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+MODEL_NAME = "alphaedge-ai/multilingual-e5-small-tha-16384"
+MODEL_CACHE_DIR = PROJECT_DIR / ".sentence_transformers_cache"
 
 
 def _log_rss(label):
+    if resource is None:
+        return
     rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     print(f"[MEMDIAG] {label}: {rss_kb / 1024:.1f} MiB", flush=True)
 RELEVANCE_THRESHOLD = 0.5
@@ -96,12 +104,12 @@ def load():
     with open(META_PATH, "r", encoding="utf-8") as f:
         meta = json.load(f)
     _log_rss("before_model_load")
+    torch.set_num_threads(1)
     try:
-        model = TextEmbedding(
-            model_name=MODEL_NAME,
-            cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
-            threads=1,
-        )
+        model_kwargs = {}
+        if MODEL_CACHE_DIR.exists():
+            model_kwargs["cache_folder"] = str(MODEL_CACHE_DIR)
+        model = SentenceTransformer(MODEL_NAME, **model_kwargs)
     except Exception:
         _log_rss("crash_point")
         raise
@@ -125,7 +133,14 @@ def search(query, index, meta, model, top_k=3):
                 seen_indices.add(idx)
 
     # Step 2: semantic search fills in the rest (or all of it, if no exact match).
-    raw_vec = np.array(list(model.embed([query], batch_size=1))[0], dtype="float32")
+    raw_vec = np.asarray(
+        model.encode_query(
+            [query],
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        )[0],
+        dtype="float32",
+    )
     norm = np.linalg.norm(raw_vec)
     if norm > 0:
         raw_vec = raw_vec / norm

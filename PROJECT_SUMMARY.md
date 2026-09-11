@@ -13,7 +13,7 @@
 | ภาษา | Python |
 | LLM | Google Gemini (`gemini-2.5-flash`, free tier) |
 | SDK | `google-genai` |
-| Embedding | `intfloat/multilingual-e5-small` |
+| Embedding | `alphaedge-ai/multilingual-e5-small-tha-16384` via `sentence-transformers` |
 | Vector search | FAISS + normalized inner product (cosine similarity) |
 | Retrieval | Hybrid: exact article-number match + semantic search |
 | Backend API | FastAPI + Uvicorn พร้อม global rate limiting |

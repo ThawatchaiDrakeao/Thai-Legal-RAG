@@ -6,7 +6,8 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from fastembed import TextEmbedding
+import torch
+from sentence_transformers import SentenceTransformer
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -16,7 +17,8 @@ PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
 CHUNKS_PATH = PROCESSED_DIR / "chunks.json"
 INDEX_PATH = PROCESSED_DIR / "faiss_index.bin"
 META_PATH = PROCESSED_DIR / "meta.json"
-MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+MODEL_NAME = "alphaedge-ai/multilingual-e5-small-tha-16384"
+MODEL_CACHE_DIR = PROJECT_DIR / ".sentence_transformers_cache"
 
 
 def normalize(vectors):
@@ -37,17 +39,24 @@ def main():
         )
 
     print("Loading embedding model:", MODEL_NAME)
-    model = TextEmbedding(
-        model_name=MODEL_NAME,
-        cache_dir=str(PROJECT_DIR / '.fastembed_cache'),
-        threads=1,
-    )
+    # Offline index construction can use a few CPU threads; query-time loading
+    # remains single-threaded for the Render memory budget.
+    torch.set_num_threads(4)
+    model_kwargs = {}
+    if MODEL_CACHE_DIR.exists():
+        model_kwargs["cache_folder"] = str(MODEL_CACHE_DIR)
+    model = SentenceTransformer(MODEL_NAME, **model_kwargs)
 
-    # E5 models expect an explicit task prefix for good retrieval quality.
     texts = [c["text"] for c in chunks]
     print("Encoding", len(texts), "chunks...")
-    embeddings = np.array(list(model.embed(texts, batch_size=128)), dtype="float32")
-    embeddings = normalize(embeddings)
+    embeddings = model.encode_document(
+        texts,
+        batch_size=64,
+        show_progress_bar=True,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+    )
+    embeddings = np.asarray(embeddings, dtype="float32")
 
     dim = embeddings.shape[1]
     index = faiss.IndexFlatIP(dim)  # cosine similarity because vectors are normalized

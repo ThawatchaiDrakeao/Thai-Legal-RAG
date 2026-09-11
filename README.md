@@ -6,6 +6,10 @@ Thai Legal RAG is a Thai legal-domain Retrieval-Augmented Generation (RAG) appli
 
 Production URL: <https://thai-legal-rag.onrender.com>
 
+Production frontend: <https://thai-legal-rag.vercel.app>
+
+The production frontend is hosted on Vercel and calls the FastAPI backend on Render through `VITE_API_URL`.
+
 Production smoke verification has been performed successfully. Long-term stability, soak testing, Render memory behavior, and production Hugging Face runtime-download behavior have not been independently verified.
 
 Verified endpoints:
@@ -192,6 +196,39 @@ Verified in production:
 
 The same article number also occurs in the civil corpus, so a civil Article 288 result can appear in the retrieved sources. This known collision has not been fixed by the current implementation.
 
+## Production E2E Verification
+
+The production frontend-to-backend smoke path has been verified:
+
+```text
+Vercel frontend -> Render /ask -> RAG retrieval -> Gemini answer -> Vercel UI
+```
+
+### Article 420
+
+Question: `มาตรา 420 มีความรับผิดอย่างไร`
+
+- Production request succeeded.
+- Answer rendered in the frontend.
+- `civil_commercial_code_snapshot.pdf`, page 75, score `1.000` was shown.
+- `found_context` was `true`.
+- The answer described Article 420 tort liability.
+
+Result: **PASS**
+
+### Article 288
+
+Question: `มาตรา 288 คืออะไร`
+
+The frontend surfaced both verified Article 288 contexts with score `1.000`:
+
+- `civil_commercial_code_snapshot.pdf`, page 55: a preferential right related to a real-estate sale.
+- `pythainlp_thai_law`: killing another person.
+
+Result: **PASS**
+
+Article-number-only queries can be ambiguous across legal sources, and the result list can include noisier context. This is recorded as a future quality improvement, not fixed in the current release.
+
 ## Project Structure
 
 ```text
@@ -228,6 +265,10 @@ thai-legal-rag/
 6. The corpus is limited and should not be treated as a complete representation of Thai law.
 7. Some scanned legal PDFs have unreliable font encoding; the affected penal-code OCR source is excluded in favor of structured text.
 8. Gemini free-tier quota can produce HTTP 429 responses.
+
+### Future quality backlog
+
+**Article-number ambiguity / retrieval noise:** article numbers can collide across Thai legal sources, as demonstrated by `มาตรา 288`. Future work may use stronger legal-source disambiguation, metadata filtering, intent/source classification, or reranking. No such change is implemented here.
 
 ## Development / Local Run
 
@@ -296,7 +337,7 @@ GitHub: <https://github.com/ThawatchaiDrakeao/Thai-Legal-RAG>
 
 Production smoke verified.
 
-The core API works for the verified production smoke checks, including Article 420 and Article 288 retrieval. Long-term stability and Render memory behavior remain unverified, and the Article 288 civil/criminal collision remains a known limitation.
+Production MVP: **LIVE**. The frontend is hosted on Vercel and the backend on Render. The core API and frontend-to-backend smoke path work for the verified Article 420 and Article 288 checks. Long-term stability and Render memory behavior remain unverified, and the Article 288 civil/criminal collision remains a known limitation.
 
 ## License / Disclaimer
 

@@ -155,3 +155,21 @@ This section records the latest verified Docker and production-embedding work. E
 - The two valid production requests completed successfully after deployment. Render runtime logs were not available through the current repository/session, so no direct log-based claim is made about runtime Hugging Face downloads, exact deployed commit, or production peak RSS.
 - Render memory limit and production peak memory remain `UNKNOWN`; the local Docker peak of 526.5 MiB must not be treated as Render measurement.
 - Current production verification is positive for these smoke/regression requests, but it is not a claim of long-term production stability.
+
+## Production frontend and E2E verification (2026-09-11)
+
+- Production frontend: `https://thai-legal-rag.vercel.app`.
+- Production backend: `https://thai-legal-rag.onrender.com`.
+- Frontend stack: React + Vite on Vercel; `VITE_API_URL` points to the Render backend.
+- Production frontend build passed, the Vercel deployment passed, and the frontend is publicly accessible.
+- The production JavaScript artifact does not contain the localhost fallback `http://127.0.0.1:8000`.
+- No browser runtime test was performed before deployment; the production browser smoke test was subsequently completed successfully.
+
+### Production E2E checks
+
+- Article 420 question `มาตรา 420 มีความรับผิดอย่างไร`: Vercel to Render request succeeded, the answer rendered, `found_context=true`, and `civil_commercial_code_snapshot.pdf` page 75 was shown with score `1.000`. The answer described Article 420 tort liability. Result: **PASS**.
+- Article 288 question `มาตรา 288 คืออะไร`: the frontend surfaced both contexts with score `1.000`: Civil and Commercial Code page 55 concerning a preferential right related to a real-estate sale, and the PyThaiNLP criminal context concerning killing another person. Result: **PASS**.
+
+### Future quality backlog
+
+Article-number ambiguity / retrieval noise remains a future quality improvement. Article numbers can collide across legal sources, and `มาตรา 288` demonstrates that the current result list can contain multiple contexts and noisier Civil Code passages. Possible future directions include stronger source disambiguation, metadata filtering, intent/source classification, or reranking. No fix was implemented in this milestone.

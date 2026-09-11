@@ -144,3 +144,14 @@ This section records the latest verified Docker and production-embedding work. E
 
 - Render must still be tested with the new commit. The local post-load RSS of 526.5 MiB exceeds the stated Render 512 MiB limit, so production success cannot be claimed.
 - Experimental reranker work and its known limitations remain separate from this production image change.
+
+## Production verification (2026-09-11)
+
+- Commits `5248818` and `44d845b` were pushed to `origin/main`; the push completed as `00e3c91..44d845b main -> main`.
+- The live service subsequently responded from Render/Uvicorn. `GET /` returned HTTP 200 with `{"service":"Thai Legal RAG API","status":"ok"}`.
+- `GET /health` returned HTTP 200 with `{"status":"ok","service":"Thai Legal RAG API","daily_requests_used":0,"daily_requests_limit":15,"minute_requests_used":0,"minute_requests_limit":4}` at verification time.
+- Production Article 420 request (`มาตรา 420 มีความรับผิดอย่างไร`) returned HTTP 200, an answer, `found_context: true`, and a matching `civil_commercial_code_snapshot.pdf` source on page 75 with score 1.0.
+- Production Article 288 request (`มาตรา 288 มีโทษอย่างไร`) returned HTTP 200, an answer, `found_context: true`, and the criminal Article 288 source from `pythainlp_thai_law`; the response also contained a civil-code Article 288 collision as another retrieved source, which is a known multi-domain exact-number limitation.
+- The two valid production requests completed successfully after deployment. Render runtime logs were not available through the current repository/session, so no direct log-based claim is made about runtime Hugging Face downloads, exact deployed commit, or production peak RSS.
+- Render memory limit and production peak memory remain `UNKNOWN`; the local Docker peak of 526.5 MiB must not be treated as Render measurement.
+- Current production verification is positive for these smoke/regression requests, but it is not a claim of long-term production stability.
